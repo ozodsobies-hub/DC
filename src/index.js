@@ -62,8 +62,8 @@ function getSiteDBConfig() {
 
   // Manual config
   return {
-    host: process.env.SITE_DB_HOST || 'roundhouse.proxy.rlwy.net',
-    port: parseInt(process.env.SITE_DB_PORT || '3306'),
+    host: process.env.SITE_DB_HOST || 'zephyr.proxy.rlwy.net',
+    port: parseInt(process.env.SITE_DB_PORT || '35377'),
     user: process.env.SITE_DB_USER || 'root',
     password: process.env.SITE_DB_PASS || '',
     database: process.env.SITE_DB_NAME || 'railway',
@@ -193,6 +193,7 @@ const client = new Client({
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.DirectMessages,
+    GatewayIntentBits.GuildPresences,
   ],
   partials: [Partials.Channel, Partials.Message]
 })
