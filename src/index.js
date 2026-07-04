@@ -28,7 +28,7 @@ const GAME_DB = {
   database:'gs137892', waitForConnections:true, connectionLimit:5, connectTimeout:15000
 }
 const SITE_DB = {
-  host: process.env.SITE_DB_HOST || 'mysql.railway.internal',
+  host: process.env.SITE_DB_HOST || 'roundhouse.proxy.rlwy.net',
   port: parseInt(process.env.SITE_DB_PORT || '3306'),
   user: process.env.SITE_DB_USER || 'root',
   password: process.env.SITE_DB_PASS || '',
