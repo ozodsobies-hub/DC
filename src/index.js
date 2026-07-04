@@ -24,8 +24,8 @@ const EMOJI_ADMIN_REQ = '1520805645140361296'
 // ═══ DB ═══
 const GAME_DB = {
   host:'188.127.241.8', port:3306,
-  user:'gs136593', password:'bT4B4WGCkdCr',
-  database:'gs136593', waitForConnections:true, connectionLimit:5, connectTimeout:15000
+  user:'gs137892', password:'XFpWuN7kssXj',
+  database:'gs137892', waitForConnections:true, connectionLimit:5, connectTimeout:15000
 }
 const SITE_DB = {
   host: process.env.SITE_DB_HOST || 'mysql.railway.internal',
