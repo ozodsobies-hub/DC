@@ -937,25 +937,3 @@ async function start() {
   await client.login(TOKEN).catch(e=>{console.error('Bot login xatosi:',e.message);process.exit(1)})
 }
 start()
-
-// Bot hisobi uchun session yaratish
-async function createBotSession() {
-  try {
-    const BOT_NICK = process.env.BOT_NICK || 'Shadows_Bot'
-    const BOT_PASS = process.env.BOT_PASS || 'shadows_bot_pass'
-    
-    // Game DB dan bot hisobini tekshirish
-    const [r] = await gamePool.query('SELECT id,name,password,salt FROM accounts WHERE name=?',[BOT_NICK])
-    if (!r[0]) { console.log('❌ Bot hisob topilmadi:', BOT_NICK); return }
-    
-    const hashed = require('crypto').createHash('sha256').update(BOT_PASS + r[0].salt).digest('hex').toUpperCase()
-    if (hashed !== r[0].password) { console.log('❌ Bot paroli noto\'g\'ri!'); return }
-    
-    if (!sitePool) return
-    const token = require('crypto').randomBytes(32).toString('hex')
-    const expires = new Date(Date.now() + 30*24*60*60*1000).toISOString().slice(0,19).replace('T',' ')
-    await sitePool.query('DELETE FROM sessions WHERE player_name=?',[BOT_NICK])
-    await sitePool.query('INSERT INTO sessions(player_name,token,ip,expires) VALUES(?,?,?,?)',[BOT_NICK,token,'bot',expires])
-    console.log('✅ Bot session yaratildi!')
-  } catch(e) { console.log('Bot session xatosi:', e.message) }
-}
