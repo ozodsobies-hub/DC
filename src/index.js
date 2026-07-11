@@ -1,5 +1,5 @@
 require('dotenv').config()
-const { Client, GatewayIntentBits, Partials, EmbedBuilder, REST, Routes, SlashCommandBuilder } = require('discord.js')
+const { Client, GatewayIntentBits, Partials, EmbedBuilder, REST, Routes, SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js')
 const mysql = require('mysql2/promise')
 const crypto = require('crypto')
 
@@ -139,16 +139,17 @@ async function sendGameCmd(cmd) {
 // Jazo berish + log + game command
 async function doPunish(adminInfo, target, type, reason, duration, client) {
   // 1. Game botga buyruq
+  const adminName = adminInfo?.name || 'Admin'
   const onlineTypes = {
-    BAN:`ban:${target.name}::${reason}`,
-    UNBAN:`unban:${target.name}::`,
-    KICK:`kick:${target.name}::${reason}`,
-    MUTE:`mute:${target.name}:${duration||30}:${reason}`,
-    UNMUTE:`unmute:${target.name}::`,
-    WARN:`warn:${target.name}::${reason}`,
-    UNWARN:`unwarn:${target.name}::`,
-    JAIL:`jail:${target.name}:${duration||30}:${reason}`,
-    UNJAIL:`unjail:${target.name}::`,
+    BAN:`ban:${target.name}::${reason}:${adminName}`,
+    UNBAN:`unban:${target.name}:::${adminName}`,
+    KICK:`kick:${target.name}::${reason}:${adminName}`,
+    MUTE:`mute:${target.name}:${duration||30}:${reason}:${adminName}`,
+    UNMUTE:`unmute:${target.name}:::${adminName}`,
+    WARN:`warn:${target.name}::${reason}:${adminName}`,
+    UNWARN:`unwarn:${target.name}:::${adminName}`,
+    JAIL:`jail:${target.name}:${duration||30}:${reason}:${adminName}`,
+    UNJAIL:`unjail:${target.name}:::${adminName}`,
   }
   if (onlineTypes[type]) await sendGameCmd(onlineTypes[type])
 
@@ -237,7 +238,6 @@ const commands = [
   new SlashCommandBuilder().setName('help').setDescription('Yordam'),
   new SlashCommandBuilder().setName('myid').setDescription('Discord ID'),
   new SlashCommandBuilder().setName('setdc').setDescription("Akkaunt bog'lash").addStringOption(o=>o.setName('nick').setDescription('Nick').setRequired(true)),
-  new SlashCommandBuilder().setName('register').setDescription('Yangi akkaunt').addStringOption(o=>o.setName('nick').setDescription('Ism_Familiya').setRequired(true)).addStringOption(o=>o.setName('gmail').setDescription('Gmail (@gmail.com)').setRequired(true)),
   new SlashCommandBuilder().setName('profil').setDescription("O'z profil"),
   new SlashCommandBuilder().setName('online').setDescription('Onlayn oyinchilar'),
   new SlashCommandBuilder().setName('server').setDescription('Server info'),
@@ -308,6 +308,7 @@ client.once('clientReady', async () => {
   console.log(`✅ Bot tayyor: ${client.user.tag}`)
   await registerCmds()
   startTimers()
+  setInterval(checkLinkRequests, 5000)
   for (const gid of [GUILD_MAIN,GUILD_ADMIN]) {
     try {
       const guild = await client.guilds.fetch(gid)
@@ -371,10 +372,53 @@ client.on('messageCreate', async msg => {
   }
 })
 
-// ═══ SLASH HANDLER ═══
+// ═══ DISCORD ID ORQALI ULANISH (Ha/Yo'q tasdiqlash) ═══
+async function checkLinkRequests() {
+  if (!sitePool) return
+  try {
+    const [reqs] = await sitePool.query("SELECT * FROM dc_link_requests WHERE status='pending' LIMIT 10")
+    for (const r of reqs) {
+      try {
+        const user = await client.users.fetch(r.dc_user_id)
+        const embed = new EmbedBuilder().setColor('#7C3AED').setTitle(`${E.id} Hisobni bog'lash so'rovi`)
+          .setDescription(`Sizning Discord hisobingiz **${r.player_name}** o'yin akkauntiga sayt orqali ulanmoqda.\n\nBu siz misiz?`)
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId(`dclink_yes_${r.id}`).setLabel("Ha, bu men").setStyle(ButtonStyle.Success),
+          new ButtonBuilder().setCustomId(`dclink_no_${r.id}`).setLabel("Yo'q").setStyle(ButtonStyle.Danger)
+        )
+        await user.send({ embeds:[embed], components:[row] })
+        await sitePool.query("UPDATE dc_link_requests SET status='sent' WHERE id=?",[r.id])
+      } catch(e) {
+        await sitePool.query("UPDATE dc_link_requests SET status='expired' WHERE id=?",[r.id]).catch(()=>{})
+      }
+    }
+  } catch(e) { console.error('Link request xato:', e.message) }
+}
+
+client.on('interactionCreate', async interaction => {
+  if (!interaction.isButton()) return
+  const [prefix, action, reqId] = interaction.customId.split('_')
+  if (prefix !== 'dclink') return
+  try {
+    const [r] = await sitePool.query('SELECT * FROM dc_link_requests WHERE id=?',[reqId])
+    if (!r[0] || r[0].status !== 'sent') { await interaction.update({content:'Bu so\'rov muddati o\'tgan.', embeds:[], components:[]}); return }
+    if (action === 'yes') {
+      await sitePool.query('INSERT INTO admin_dc_users(player_name,dc_user_id,dc_username,is_verified) VALUES(?,?,?,1) ON DUPLICATE KEY UPDATE dc_user_id=?,dc_username=?,is_verified=1',
+        [r[0].player_name, r[0].dc_user_id, interaction.user.username, r[0].dc_user_id, interaction.user.username])
+      await sitePool.query("UPDATE dc_link_requests SET status='confirmed' WHERE id=?",[reqId])
+      await sitePool.query('INSERT INTO notifications(player_name,title,message,type) VALUES(?,?,?,?)',[r[0].player_name,'Discord bog\'landi!','Hisobingiz Discord bilan muvaffaqiyatli bog\'landi.','success']).catch(()=>{})
+      await interaction.update({content:`${E.ok} Tasdiqlandi! **${r[0].player_name}** hisobi Discord'ingizga bog'landi.`, embeds:[], components:[]})
+    } else {
+      await sitePool.query("UPDATE dc_link_requests SET status='rejected' WHERE id=?",[reqId])
+      await interaction.update({content:`${E.reject} Bekor qilindi. Agar bu siz bo'lmasangiz, xavotir olmang — hech narsa bog'lanmadi.`, embeds:[], components:[]})
+    }
+  } catch(e) { console.error('Link button xato:', e.message) }
+})
+
+
 client.on('interactionCreate', async interaction => {
   if (!interaction.isChatInputCommand()) return
-  const pub = ['start','help','myid','profil','mypul','server','online','top','toplevel','topmoney','topscore','tophours','setdc','register','transfer']
+  const pub = ['start','help','myid','profil','mypul','server','online','top','toplevel','topmoney','topscore','tophours','setdc','transfer']
   await interaction.deferReply({ephemeral:pub.includes(interaction.commandName)}).catch(()=>{})
 
   const cmd = interaction.commandName
@@ -406,20 +450,6 @@ client.on('interactionCreate', async interaction => {
     return
   }
 
-  // ── REGISTER ──
-  if (cmd==='register') {
-    const nick=g('nick'), gmail=g('gmail')
-    if (!/^[A-Za-z]+_[A-Za-z]+$/.test(nick)) { await reply(`${E.reject} Nick: Ism_Familiya formatida`); return }
-    if (!gmail?.includes('@gmail.com')) { await reply(`${E.reject} To'g'ri Gmail kiriting! (example@gmail.com)`); return }
-    if (await getPlayer(nick)) { await reply(`${E.reject} **${nick}** allaqachon mavjud!`); return }
-    pendingRegister.set(interaction.user.id,{nick,gmail,step:'password',time:Date.now()})
-    try {
-      await interaction.user.send(`${E.register} **${nick}** akkaunt yaratish\nGmail: ${gmail}\n\nParol o'rnating (kamida 6 belgi):`)
-      await reply(`${E.ok} DM ga yuborildi!`)
-    } catch { await reply(`${E.reject} DM yuborib bo'lmadi!`); pendingRegister.delete(interaction.user.id) }
-    return
-  }
-
   // ── START/HELP ──
   if (cmd==='start'||cmd==='help') {
     const embed=new EmbedBuilder().setColor('#7C3AED')
@@ -443,7 +473,7 @@ client.on('interactionCreate', async interaction => {
         .addFields(
           {name:`${E.profil} Profil`,value:'`/profil` `/online` `/top` `/server`'},
           {name:`${E.transfer} Moliya`,value:'`/mypul` `/transfer <nick> <miqdor>`'},
-          {name:`${E.register} Akkaunt`,value:'`/setdc <nick>` — Bog\'lash\n`/register <nick> <gmail>` — Yangi\n`/myid` — ID'},
+          {name:`${E.register} Akkaunt`,value:'`/setdc <nick>` — Bog\'lash\n`/myid` — ID'},
         )
     }
     await replyE(embed); return
