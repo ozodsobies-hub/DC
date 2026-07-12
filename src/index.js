@@ -64,7 +64,6 @@ const SITE_DB = {
 
 let gamePool, sitePool
 const pendingVerify = new Map()
-const pendingRegister = new Map()
 
 // ═══ DB INIT ═══
 async function initDB() {
@@ -343,32 +342,6 @@ client.on('messageCreate', async msg => {
       pendingVerify.delete(msg.author.id)
     } catch(e) { await msg.reply(`${E.reject} Xato: ${e.message}`); pendingVerify.delete(msg.author.id) }
     return
-  }
-
-  // REGISTER
-  if (pendingRegister.has(msg.author.id)) {
-    const pr = pendingRegister.get(msg.author.id)
-    if (Date.now()-pr.time>5*60*1000) { pendingRegister.delete(msg.author.id); await msg.reply(`${E.reject} Vaqt tugadi!`); return }
-    if (pr.step==='password') {
-      if (msg.content.trim().length<6) { await msg.reply(`${E.reject} Parol kamida 6 belgi!`); return }
-      pr.password=msg.content.trim(); pr.step='confirm'; pendingRegister.set(msg.author.id,pr)
-      await msg.reply('🔐 Parolni tasdiqlang (qayta yozing):'); return
-    }
-    if (pr.step==='confirm') {
-      if (msg.content.trim()!==pr.password) { pr.step='password'; pendingRegister.set(msg.author.id,pr); await msg.reply(`${E.reject} Parollar mos kelmadi! Yangi parol yozing:`); return }
-      try {
-        const salt=crypto.randomBytes(16).toString('hex')
-        const hash=crypto.createHash('sha256').update(pr.password+salt).digest('hex').toUpperCase()
-        await gamePool.query('INSERT INTO accounts(name,password,salt,email,reg_time,last_login,level,money,score) VALUES(?,?,?,?,UNIX_TIMESTAMP(),UNIX_TIMESTAMP(),1,0,0)',[pr.nick,hash,salt,pr.gmail])
-        if (sitePool) await sitePool.query('INSERT INTO admin_dc_users(player_name,dc_user_id,dc_username,is_verified) VALUES(?,?,?,1) ON DUPLICATE KEY UPDATE dc_user_id=?,dc_username=?,is_verified=1',
-          [pr.nick,msg.author.id,msg.author.username,msg.author.id,msg.author.username])
-        await msg.reply(`${E.ok} **${pr.nick}** akkaunt yaratildi!\n\n📧 Gmail: ${pr.gmail}\n🔐 Parol: *siz bilasiz*\n🎮 O'yinga kiring!`)
-        pendingRegister.delete(msg.author.id)
-      } catch(e) {
-        await msg.reply(e.code==='ER_DUP_ENTRY'?`${E.reject} Bu nick allaqachon mavjud!`:`${E.reject} Xato: ${e.message}`)
-        pendingRegister.delete(msg.author.id)
-      }
-    }
   }
 })
 
