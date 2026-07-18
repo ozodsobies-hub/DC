@@ -256,6 +256,7 @@ const commands = [
   new SlashCommandBuilder().setName('hp').setDescription('HP [1+]').addStringOption(o=>o.setName('nick').setDescription('Nick/ID').setRequired(true)).addIntegerOption(o=>o.setName('miqdor').setDescription('Miqdor').setRequired(true)),
   new SlashCommandBuilder().setName('heal').setDescription('Davolash [1+]').addStringOption(o=>o.setName('nick').setDescription('Nick/ID').setRequired(true)),
   new SlashCommandBuilder().setName('sendall').setDescription('Hammaga xabar').addStringOption(o=>o.setName('matn').setDescription('Xabar').setRequired(true)),
+  new SlashCommandBuilder().setName('givedonate').setDescription('Donat berish [Owner]').addStringOption(o=>o.setName('nick').setDescription('Nick/ID').setRequired(true)).addIntegerOption(o=>o.setName('miqdor').setDescription('RUB miqdori').setRequired(true)),
   new SlashCommandBuilder().setName('makeadmin').setDescription('Admin qilish [Owner]').addStringOption(o=>o.setName('nick').setDescription('Nick').setRequired(true)).addIntegerOption(o=>o.setName('daraja').setDescription('Daraja (1-11)').setRequired(true)),
   new SlashCommandBuilder().setName('unadmin').setDescription("Admin'likdan olish [Owner]").addStringOption(o=>o.setName('nick').setDescription('Nick').setRequired(true)),
   new SlashCommandBuilder().setName('tanbex').setDescription('Tanbex berish [Owner]').addStringOption(o=>o.setName('nick').setDescription('Nick').setRequired(true)).addStringOption(o=>o.setName('sabab').setDescription('Sabab').setRequired(true)),
@@ -372,7 +373,7 @@ client.on('interactionCreate', async interaction => {
           {name:`${E.active} Aktivlik`,value:'`/myactive [today/week]`\n`/active <nick>` `/activeall` `/topactive`\n`/report <nick>` `/reportall` `/topreport`'},
           {name:`${E.mgive} Moliya`,value:'`/pul` `/olpul` `/setlevel` `/sendall`'},
           {name:`${E.news} Yangilik`,value:'`/postnews <admin/server> <sarlavha> <matn> [rasm]`'},
-          {name:`${E.admin} Owner`,value:'`/makeadmin` `/unadmin` `/tanbex` `/vig`'},
+          {name:`${E.admin} Owner`,value:'`/makeadmin` `/unadmin` `/tanbex` `/vig`\n`/givedonate <nick> <miqdor>`'},
           {name:`${E.fraksiya} Fraksiya`,value:'`/fraksiya <id>` `/setrank <nick> <rank>`'},
         )
     } else {
@@ -615,6 +616,20 @@ client.on('interactionCreate', async interaction => {
     await gamePool.query('UPDATE accounts SET level=? WHERE name=?',[lvl,t.name])
     await sendGameCmd(`setlevel:${t.name}:${lvl}:`)
     await reply(`${E.ok} **${t.name}** daraja **${lvl}**!`)
+    return
+  }
+  if (cmd==='givedonate') {
+    if (!isOwner) { await reply(`${E.reject} Faqat Owner!`); return }
+    const t=await getPlayer(g('nick')), m=gi('miqdor')
+    if (!t) { await reply(`${E.notfound} Topilmadi!`); return }
+    await gamePool.query('UPDATE accounts SET donate_current=donate_current+?,donate_total=donate_total+? WHERE name=?',[m,m,t.name])
+    if (sitePool) {
+      await sitePool.query('INSERT INTO notifications(player_name,title,message,type) VALUES(?,?,?,?)',
+        [t.name,'Donat olindi!',`Sizga ${m} RUB donat qo'shildi. Rahmat!`,'success']).catch(()=>{})
+      await sitePool.query('INSERT INTO admin_logs(admin_name,action,details,source) VALUES(?,?,?,?)',
+        [playerInfo.name,'givedonate',`${t.name} ga ${m} RUB`,'discord']).catch(()=>{})
+    }
+    await reply(`${E.mgive} **${t.name}** ga **${m} RUB** donat berildi!`)
     return
   }
 
