@@ -282,6 +282,47 @@ async function registerCmds() {
   } catch(e) { console.error('Slash xato:', e.message) }
 }
 
+/* ══════════════════════ YANGI ARIZA BILDIRISHNOMASI ══════════════════════ */
+let lastAppCheck = Date.now()
+
+async function checkNewApplications() {
+  if (!sitePool || !gamePool) return
+  try {
+    const [apps] = await sitePool.query(
+      "SELECT * FROM admin_applications WHERE status='kutilmoqda' AND created_at > ? ORDER BY created_at DESC LIMIT 5",
+      [new Date(lastAppCheck - 30000).toISOString().slice(0,19).replace('T',' ')]
+    )
+    lastAppCheck = Date.now()
+    for (const app of apps) {
+      try {
+        // O'yinchi statistikasi
+        let stats = {}
+        try { stats = JSON.parse(app.statistics||'{}') } catch {}
+
+        const embed = new EmbedBuilder()
+          .setColor('#7C3AED')
+          .setTitle(`${E.register} Yangi Admin Ariza`)
+          .setDescription(`**${app.player_name}** adminlikka ariza yubordi!`)
+          .addFields(
+            {name:'👤 Nick',value:`**${app.player_name}**`,inline:true},
+            {name:'📱 Discord',value:app.dc_username?`@${app.dc_username}`:'—',inline:true},
+            {name:'🎂 Yosh',value:`${app.age} yosh`,inline:true},
+            {name:'⭐ Daraja',value:`${stats.level||'—'}`,inline:true},
+            {name:'⏱️ Vaqt',value:`${stats.totalhour||'—'} soat`,inline:true},
+            {name:'📊 Score',value:`${stats.score||'—'}`,inline:true},
+            {name:'💬 Jamoa muhiti',value:app.team_atmosphere?.slice(0,200)||'—'},
+            {name:'🎮 Nima olib keldi',value:app.why_play?.slice(0,200)||'—'},
+          )
+          .setTimestamp()
+          .setFooter({text:`Ariza #${app.id} • Owner Paneldan ko'rish mumkin`})
+
+        const ch = await client.channels.fetch(CH_ADMIN_NEWS).catch(()=>null)
+        if (ch) await ch.send({embeds:[embed]})
+      } catch(e) { console.error('Ariza bildirishnoma xato:', e.message) }
+    }
+  } catch(e) { console.error('checkNewApplications xato:', e.message) }
+}
+
 /* ══════════════════════ CLIENT ══════════════════════ */
 const client = new Client({
   intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildMembers,GatewayIntentBits.DirectMessages,GatewayIntentBits.GuildPresences],
@@ -293,6 +334,7 @@ client.once('clientReady', async () => {
   await registerCmds()
   startTimers()
   setInterval(checkLinkRequests, 5000)
+  setInterval(checkNewApplications, 15000)
   for (const gid of [GUILD_MAIN,GUILD_ADMIN]) {
     try {
       const guild = await client.guilds.fetch(gid)
