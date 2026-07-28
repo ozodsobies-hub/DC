@@ -53,25 +53,63 @@ const E = {
 /* ══════════════════════ DATABASE ══════════════════════ */
 const GAME_DB = {
   host:'188.127.241.8', port:3306, user:'gs137892', password:'XFpWuN7kssXj',
-  database:'gs137892', waitForConnections:true, connectionLimit:10, connectTimeout:15000
+  database:'gs137892', waitForConnections:true, connectionLimit:5,
+  connectTimeout:20000, idleTimeout:60000,
+  enableKeepAlive:true, keepAliveInitialDelay:10000,
 }
 const SITE_DB = {
-  host: process.env.SITE_DB_HOST||'zephyr.proxy.rlwy.net',
-  port: parseInt(process.env.SITE_DB_PORT||'35377'),
+  host: process.env.SITE_DB_HOST||'tokaido.proxy.rlwy.net',
+  port: parseInt(process.env.SITE_DB_PORT||'41945'),
   user: process.env.SITE_DB_USER||'root',
-  password: process.env.SITE_DB_PASS||'HQMqKjcxPaoAXsaqNdrMRhcFRzPusZhj',
+  password: process.env.SITE_DB_PASS||'NFwdBqrNwXOnvggbDIAeQWDKGWiclZGg',
   database: process.env.SITE_DB_NAME||'railway',
-  waitForConnections:true, connectionLimit:10, connectTimeout:20000
+  waitForConnections:true, connectionLimit:5,
+  connectTimeout:20000, idleTimeout:60000,
+  enableKeepAlive:true, keepAliveInitialDelay:10000,
 }
 
 let gamePool, sitePool
 
+async function safeQuery(pool, sql, params=[]) {
+  try { return await pool.query(sql, params) }
+  catch(e) {
+    if (e.code==='ECONNRESET'||e.code==='PROTOCOL_CONNECTION_LOST'||e.code==='ETIMEDOUT') {
+      console.log('DB reconnect urinish...')
+      await new Promise(r=>setTimeout(r,1000))
+      return await pool.query(sql, params)
+    }
+    throw e
+  }
+}
+
 async function initDB() {
-  try { gamePool = mysql.createPool(GAME_DB); await gamePool.query('SELECT 1'); console.log('✅ Game DB ulandi!') }
-  catch(e) { console.error('❌ Game DB xatosi:', e.message) }
-  for (let i=0; i<3; i++) {
-    try { sitePool = mysql.createPool(SITE_DB); await sitePool.query('SELECT 1'); console.log('✅ Site DB ulandi!'); return }
-    catch(e) { console.error(`❌ Site DB urinish ${i+1}:`, e.message); await new Promise(r=>setTimeout(r,4000)) }
+  try {
+    gamePool = mysql.createPool(GAME_DB)
+    gamePool.on('error', err => {
+      console.error('Game DB pool xato:', err.code)
+    })
+    await gamePool.query('SELECT 1')
+    console.log('✅ Game DB ulandi!')
+  } catch(e) { console.error('❌ Game DB xatosi:', e.message) }
+
+  for (let i=0; i<5; i++) {
+    try {
+      sitePool = mysql.createPool(SITE_DB)
+      sitePool.on('error', err => {
+        console.error('Site DB pool xato:', err.code)
+      })
+      await sitePool.query('SELECT 1')
+      console.log('✅ Site DB ulandi!')
+      // Har 4 daqiqada ping yuborib ulanishni saqlaymiz
+      setInterval(async()=>{
+        try { if(gamePool) await gamePool.query('SELECT 1') } catch {}
+        try { if(sitePool) await sitePool.query('SELECT 1') } catch {}
+      }, 4*60*1000)
+      return
+    } catch(e) {
+      console.error(`❌ Site DB urinish ${i+1}:`, e.message)
+      await new Promise(r=>setTimeout(r,4000))
+    }
   }
   console.error('❌ Site DB ulanmadi!')
 }
